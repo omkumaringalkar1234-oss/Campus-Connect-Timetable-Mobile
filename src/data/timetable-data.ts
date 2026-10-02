@@ -202,7 +202,7 @@ function makeSlot(
   subjectCode?: string
 ): TimetableEntry {
   // Support both '–' (en-dash) and '-' (hyphen) as separators
-  const [startRaw, endRaw] = time.split(/\s*[–-]\s*/).map((s) => s.trim());
+  const [startRaw, endRaw] = time.split(/\s*[-–]\s*/).map((s) => s.trim());
   const toAmPm = (t: string) => {
     const [h, m] = t.split(':').map(Number);
     const suffix = h >= 12 ? 'PM' : 'AM';

@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassColors } from '@/theme/glass-theme';
 
-const INSTAGRAM_URL = 'https://www.instagram.com/invites/contact/?utm_content=olimohv&stkn=8zywe3hq9mhm';
+const INSTAGRAM_URL = 'https://www.instagram.com/invites/contact/?utm_source=ig_contact_invite&utm_medium=copy_link&utm_content=olimohv';
 
 export function Watermark() {
   const insets = useSafeAreaInsets();
@@ -153,8 +153,8 @@ export function Watermark() {
                   <Ionicons name="logo-instagram" size={20} color="#FFFFFF" />
                 </View>
                 <View style={styles.instaTextGroup}>
-                  <Text style={styles.instaBtnTitle}>Follow on Instagram</Text>
-                  <Text style={styles.instaBtnHandle}>@omkumaringalkar</Text>
+                  <Text style={styles.instaBtnTitle}>Instagram</Text>
+                  <Text style={styles.instaBtnHandle}>_omkumar.__</Text>
                 </View>
                 <Ionicons
                   name="arrow-forward"
