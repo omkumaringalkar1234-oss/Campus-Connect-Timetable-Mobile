@@ -15,6 +15,9 @@ interface GlassInputProps {
   onChangeText: (text: string) => void;
   placeholder?: string;
   autoFocus?: boolean;
+  secureTextEntry?: boolean;
+  iconName?: keyof typeof Ionicons.glyphMap;
+  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   onSubmitEditing?: () => void;
 }
 
@@ -23,9 +26,13 @@ export function GlassInput({
   onChangeText,
   placeholder = 'ENTER USERNAME',
   autoFocus = false,
+  secureTextEntry = false,
+  iconName = 'person-outline',
+  autoCapitalize = 'words',
   onSubmitEditing,
 }: GlassInputProps) {
   const [isFocused, setIsFocused] = useState(false);
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const glowAnim = useRef(new Animated.Value(0)).current;
 
   const handleFocus = () => {
@@ -81,7 +88,7 @@ export function GlassInput({
       ]}
     >
       <Ionicons
-        name="person-outline"
+        name={iconName}
         size={20}
         color={isFocused ? GlassColors.cyan : GlassColors.textMuted}
         style={styles.icon}
@@ -95,28 +102,42 @@ export function GlassInput({
         onFocus={handleFocus}
         onBlur={handleBlur}
         autoFocus={autoFocus}
-        autoCapitalize="words"
+        secureTextEntry={secureTextEntry && !isPasswordVisible}
+        autoCapitalize={autoCapitalize}
         autoCorrect={false}
         returnKeyType="done"
         onSubmitEditing={onSubmitEditing}
       />
-      {value.length > 0 && (
-        <Pressable onPress={() => onChangeText('')} hitSlop={10} style={styles.clearBtn}>
+
+      {secureTextEntry ? (
+        <Pressable
+          onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+          hitSlop={12}
+          style={styles.actionBtn}
+        >
+          <Ionicons
+            name={isPasswordVisible ? 'eye-off-outline' : 'eye-outline'}
+            size={20}
+            color={isPasswordVisible ? GlassColors.cyan : GlassColors.textMuted}
+          />
+        </Pressable>
+      ) : value.length > 0 ? (
+        <Pressable onPress={() => onChangeText('')} hitSlop={10} style={styles.actionBtn}>
           <Ionicons name="close-circle" size={18} color={GlassColors.textMuted} />
         </Pressable>
-      )}
+      ) : null}
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    height: 60,
-    borderRadius: 20,
+    height: 56,
+    borderRadius: 18,
     borderWidth: 1.5,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     width: '100%',
     ...Platform.select({
       web: {
@@ -126,17 +147,17 @@ const styles = StyleSheet.create({
     }),
   },
   icon: {
-    marginRight: 14,
+    marginRight: 12,
   },
   input: {
     flex: 1,
     height: '100%',
     color: GlassColors.textPrimary,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
-  clearBtn: {
-    padding: 4,
+  actionBtn: {
+    padding: 6,
   },
 });

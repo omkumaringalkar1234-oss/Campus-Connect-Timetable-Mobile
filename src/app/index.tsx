@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { View, StyleSheet, ActivityIndicator, Text } from 'react-native';
 import { useRouter } from 'expo-router';
-import { getStoredTimetablePrefs } from '@/storage/preferences-storage';
+import { getCurrentUser } from '@/storage/preferences-storage';
 import { BackgroundOrbs } from '@/components/BackgroundOrbs';
 import { GlassColors } from '@/theme/glass-theme';
 
@@ -11,12 +11,13 @@ export default function IndexScreen() {
   useEffect(() => {
     let mounted = true;
     (async () => {
-      // Short delay for smooth asset readiness
-      await new Promise((resolve) => setTimeout(resolve, 350));
-      const prefs = await getStoredTimetablePrefs();
+      // Short delay for smooth loading
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      const user = await getCurrentUser();
       if (!mounted) return;
 
-      if (prefs && prefs.branchId && prefs.divisionId && prefs.subdivisionId) {
+      if (user && user.username && user.branchId && user.divisionId && user.subdivisionId) {
+        // Automatically bypass login and directly show timetable!
         router.replace('/timetable');
       } else {
         router.replace('/setup');
@@ -46,6 +47,7 @@ export default function IndexScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    width: '100%',
     backgroundColor: GlassColors.bgDark,
     alignItems: 'center',
     justifyContent: 'center',

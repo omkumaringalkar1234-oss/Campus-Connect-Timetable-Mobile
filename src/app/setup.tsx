@@ -1,15 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   SafeAreaView,
   Pressable,
-  Animated,
-  Easing,
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
+  KeyboardAvoidingView,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,356 +16,445 @@ import { BackgroundOrbs } from '@/components/BackgroundOrbs';
 import { GlassCard } from '@/components/GlassCard';
 import { GlassButton } from '@/components/GlassButton';
 import { GlassInput } from '@/components/GlassInput';
-import { StepProgress } from '@/components/StepProgress';
-import { Carousel3D } from '@/components/Carousel3D';
-import { TimetableService, BranchOption, DivisionOption, SubdivisionOption } from '@/services/timetable-service';
-import { saveStoredTimetablePrefs, getStoredTimetablePrefs } from '@/storage/preferences-storage';
+import {
+  TimetableService,
+  BranchOption,
+  DivisionOption,
+  SubdivisionOption,
+} from '@/services/timetable-service';
+import {
+  registerUser,
+  loginUser,
+  getCurrentUser,
+  UserAccount,
+} from '@/storage/preferences-storage';
 import { GlassColors } from '@/theme/glass-theme';
 
-export default function SetupScreen() {
+export default function SetupAndAuthScreen() {
   const router = useRouter();
 
-  // Wizard state: 0 = Username, 1 = Branch, 2 = Division, 3 = Subdivision
-  const [step, setStep] = useState(0);
+  // Mode: 'signin' | 'register'
+  const [mode, setMode] = useState<'signin' | 'register'>('register');
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
-  // Form selections
+  // Form states
   const [username, setUsername] = useState('');
-  const [selectedBranch, setSelectedBranch] = useState<BranchOption | null>(null);
-  const [selectedDivision, setSelectedDivision] = useState<DivisionOption | null>(null);
-  const [selectedSubdivision, setSelectedSubdivision] = useState<SubdivisionOption | null>(null);
+  const [password, setPassword] = useState('');
 
-  // Dynamic datasets from actual timetable data
+  // Setup options for Register
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [divisions, setDivisions] = useState<DivisionOption[]>([]);
   const [subdivisions, setSubdivisions] = useState<SubdivisionOption[]>([]);
 
-  // Screen animation
-  const fadeAnim = useRef(new Animated.Value(1)).current;
-  const slideAnim = useRef(new Animated.Value(0)).current;
+  const [selectedBranch, setSelectedBranch] = useState<BranchOption | null>(null);
+  const [selectedDivision, setSelectedDivision] = useState<DivisionOption | null>(null);
+  const [selectedSubdivision, setSelectedSubdivision] = useState<SubdivisionOption | null>(null);
 
-  // Initialize data
+  // Initialize options
   useEffect(() => {
-    const branchList = TimetableService.getBranches();
-    setBranches(branchList);
+    const list = TimetableService.getBranches();
+    setBranches(list);
 
-    // Pre-populate if already in storage
     (async () => {
-      const saved = await getStoredTimetablePrefs();
-      if (saved) {
-        if (saved.username) setUsername(saved.username);
-        const b = branchList.find((item) => item.id === saved.branchId || item.code === saved.branchCode);
-        if (b) {
-          setSelectedBranch(b);
-          const divList = TimetableService.getDivisionsForBranch(b.id);
-          setDivisions(divList);
-          const d = divList.find((item) => item.id === saved.divisionId);
-          if (d) {
-            setSelectedDivision(d);
-            const subList = TimetableService.getSubdivisions(b.id, d.id);
-            setSubdivisions(subList);
-            const s = subList.find((item) => item.id === saved.subdivisionId);
-            if (s) setSelectedSubdivision(s);
-          }
+      const active = await getCurrentUser();
+      if (active) {
+        setUsername(active.username || '');
+        const matchedBranch = list.find((b) => b.id === active.branchId || b.code === active.branchCode);
+        if (matchedBranch) {
+          setSelectedBranch(matchedBranch);
+        } else if (list.length > 0) {
+          setSelectedBranch(list[0]);
         }
-      } else if (branchList.length > 0) {
-        // Default to first branch if empty
-        const defaultBranch = branchList.find((b) => b.code === 'IT') || branchList[0];
+      } else if (list.length > 0) {
+        const defaultBranch = list.find((b) => b.code === 'IT') || list[0];
         setSelectedBranch(defaultBranch);
       }
     })();
   }, []);
 
-  // Update divisions whenever branch changes
+  // Update divisions when branch changes
   useEffect(() => {
     if (selectedBranch) {
       const divList = TimetableService.getDivisionsForBranch(selectedBranch.id);
       setDivisions(divList);
       if (divList.length > 0) {
-        // Keep previous division if exists, otherwise first
-        const matched = divList.find((d) => d.id === selectedDivision?.id) || divList[0];
-        setSelectedDivision(matched);
+        setSelectedDivision(divList[0]);
       } else {
         setSelectedDivision(null);
       }
     }
   }, [selectedBranch?.id]);
 
-  // Update subdivisions whenever division changes
+  // Update subdivisions when division changes
   useEffect(() => {
     if (selectedBranch && selectedDivision) {
       const subList = TimetableService.getSubdivisions(selectedBranch.id, selectedDivision.id);
       setSubdivisions(subList);
       if (subList.length > 0) {
-        const matched = subList.find((s) => s.id === selectedSubdivision?.id) || subList[0];
-        setSelectedSubdivision(matched);
+        setSelectedSubdivision(subList[0]);
       } else {
         setSelectedSubdivision(null);
       }
     }
   }, [selectedBranch?.id, selectedDivision?.id]);
 
-  const transitionToStep = (newStep: number) => {
-    const direction = newStep > step ? 1 : -1;
+  const handleRegister = async () => {
+    setErrorMessage('');
+    if (!username.trim()) {
+      setErrorMessage('Please enter your username');
+      return;
+    }
+    if (!password || password.length < 3) {
+      setErrorMessage('Password must be at least 3 characters');
+      return;
+    }
+    if (!selectedBranch || !selectedDivision || !selectedSubdivision) {
+      setErrorMessage('Please select your branch, division, and batch');
+      return;
+    }
 
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 150,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: -direction * 40,
-        duration: 150,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setStep(newStep);
-      slideAnim.setValue(direction * 40);
-
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 220,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 220,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]).start();
+    setLoading(true);
+    const result = await registerUser({
+      username: username.trim(),
+      password,
+      branchId: selectedBranch.id,
+      branchCode: selectedBranch.code,
+      branchLabel: selectedBranch.name,
+      divisionId: selectedDivision.id,
+      divisionLabel: selectedDivision.name,
+      subdivisionId: selectedSubdivision.id,
+      subdivisionLabel: selectedSubdivision.name,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     });
+
+    setLoading(false);
+    if (!result.success) {
+      setErrorMessage(result.error || 'Registration failed');
+      return;
+    }
+
+    // Go directly to timetable!
+    router.replace('/timetable');
   };
 
-  const handleNext = async () => {
-    if (step === 0) {
-      if (!username.trim()) return;
-      transitionToStep(1);
-    } else if (step === 1) {
-      if (!selectedBranch) return;
-      transitionToStep(2);
-    } else if (step === 2) {
-      if (!selectedDivision) return;
-      transitionToStep(3);
-    } else if (step === 3) {
-      // Save and finish
-      if (!selectedBranch || !selectedDivision || !selectedSubdivision) return;
-
-      await saveStoredTimetablePrefs({
-        username: username.trim(),
-        branchId: selectedBranch.id,
-        branchCode: selectedBranch.code,
-        branchLabel: selectedBranch.name,
-        divisionId: selectedDivision.id,
-        divisionLabel: selectedDivision.name,
-        subdivisionId: selectedSubdivision.id,
-        subdivisionLabel: selectedSubdivision.name,
-        updatedAt: new Date().toISOString(),
-      });
-
-      router.replace('/timetable');
+  const handleSignIn = async () => {
+    setErrorMessage('');
+    if (!username.trim()) {
+      setErrorMessage('Please enter your username');
+      return;
     }
-  };
-
-  const handleBack = () => {
-    if (step > 0) {
-      transitionToStep(step - 1);
+    if (!password) {
+      setErrorMessage('Please enter your password');
+      return;
     }
+
+    setLoading(true);
+    const result = await loginUser(username.trim(), password);
+    setLoading(false);
+
+    if (!result.success) {
+      setErrorMessage(result.error || 'Login failed');
+      return;
+    }
+
+    // Go directly to timetable!
+    router.replace('/timetable');
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <BackgroundOrbs />
+
       <KeyboardAvoidingView
         style={styles.keyboardAvoid}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {/* Top Header & Navigation */}
-        <View style={styles.topNav}>
-          {step > 0 ? (
-            <Pressable onPress={handleBack} hitSlop={12} style={styles.backBtn}>
-              <Ionicons name="chevron-back" size={20} color={GlassColors.cyan} />
-              <Text style={styles.backBtnText}>Back</Text>
-            </Pressable>
-          ) : (
-            <View style={{ width: 60 }} />
-          )}
-
-          <View style={styles.headerTag}>
-            <View style={styles.headerTagDot} />
-            <Text style={styles.headerTagText}>JSPM TATHAWADE</Text>
-          </View>
-
-          <View style={{ width: 60 }} />
-        </View>
-
-        {/* Step Progress Indicator */}
-        <StepProgress currentStep={step} />
-
-        {/* Main Animated Step Content */}
-        <Animated.View
-          style={[
-            styles.contentContainer,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateX: slideAnim }],
-            },
-          ]}
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          {/* ── STEP 0: USERNAME ────────────────────────────────────────── */}
-          {step === 0 && (
-            <ScrollView contentContainerStyle={styles.step0Content} showsVerticalScrollIndicator={false}>
-              <View style={styles.titleWrap}>
-                <Text style={styles.welcomeText}>WELCOME</Text>
-                <Text style={styles.mainTitle}>Enter Your Identity</Text>
-                <Text style={styles.subTitle}>
-                  Your personalized timetable dashboard will be tailored to your name and section.
-                </Text>
+          <View style={styles.innerContainer}>
+            {/* ── TOP BADGE & BRANDING ───────────────────────────────── */}
+            <View style={styles.brandingSection}>
+              <View style={styles.logoBadge}>
+                <Text style={styles.logoEmoji}>⚡</Text>
               </View>
+              <Text style={styles.brandTitle}>CAMPUS CONNECT</Text>
+              <Text style={styles.brandSubtitle}>TIMETABLE PORTAL</Text>
+            </View>
 
-              <GlassCard glow style={styles.inputCard}>
-                <Text style={styles.inputLabel}>USERNAME</Text>
-                <GlassInput
-                  value={username}
-                  onChangeText={setUsername}
-                  placeholder="ENTER USERNAME"
-                  autoFocus
-                  onSubmitEditing={handleNext}
+            {/* ── SEGMENTED TAB SWITCH: REGISTER vs SIGN IN ─────────── */}
+            <View style={styles.tabContainer}>
+              <Pressable
+                onPress={() => {
+                  setMode('register');
+                  setErrorMessage('');
+                }}
+                style={[styles.tabButton, mode === 'register' && styles.tabButtonActive]}
+              >
+                <Ionicons
+                  name="person-add-outline"
+                  size={16}
+                  color={mode === 'register' ? GlassColors.cyan : GlassColors.textMuted}
                 />
+                <Text style={[styles.tabText, mode === 'register' && styles.tabTextActive]}>
+                  REGISTER
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  setMode('signin');
+                  setErrorMessage('');
+                }}
+                style={[styles.tabButton, mode === 'signin' && styles.tabButtonActive]}
+              >
+                <Ionicons
+                  name="log-in-outline"
+                  size={16}
+                  color={mode === 'signin' ? GlassColors.cyan : GlassColors.textMuted}
+                />
+                <Text style={[styles.tabText, mode === 'signin' && styles.tabTextActive]}>
+                  SIGN IN
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* ── ERROR MESSAGE BANNER ──────────────────────────────── */}
+            {errorMessage ? (
+              <View style={styles.errorBanner}>
+                <Ionicons name="alert-circle" size={18} color="#FF5252" />
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              </View>
+            ) : null}
+
+            {/* ── MODE: SIGN IN ─────────────────────────────────────── */}
+            {mode === 'signin' ? (
+              <GlassCard glow style={styles.card}>
+                <Text style={styles.formHeader}>Welcome Back</Text>
+                <Text style={styles.formSubHeader}>
+                  Sign in with your registered username & password to view your timetable.
+                </Text>
+
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>USERNAME</Text>
+                  <GlassInput
+                    value={username}
+                    onChangeText={setUsername}
+                    placeholder="Enter your username"
+                    iconName="person-outline"
+                    autoCapitalize="none"
+                  />
+                </View>
+
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>PASSWORD</Text>
+                  <GlassInput
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="Enter your password"
+                    secureTextEntry
+                    iconName="lock-closed-outline"
+                    autoCapitalize="none"
+                    onSubmitEditing={handleSignIn}
+                  />
+                </View>
+
+                <View style={{ marginTop: 24 }}>
+                  {loading ? (
+                    <ActivityIndicator color={GlassColors.cyan} size="large" />
+                  ) : (
+                    <GlassButton
+                      title="SIGN IN & VIEW TIMETABLE"
+                      onPress={handleSignIn}
+                      iconName="arrow-forward"
+                    />
+                  )}
+                </View>
+
+                <Pressable
+                  onPress={() => {
+                    setMode('register');
+                    setErrorMessage('');
+                  }}
+                  style={styles.switchModeLink}
+                >
+                  <Text style={styles.switchModeText}>
+                    Don't have an account?{' '}
+                    <Text style={{ color: GlassColors.cyan, fontWeight: '800' }}>Register here</Text>
+                  </Text>
+                </Pressable>
               </GlassCard>
-
-              <View style={styles.buttonBottomArea}>
-                <GlassButton
-                  title="CONTINUE"
-                  onPress={handleNext}
-                  disabled={!username.trim()}
-                  iconName="arrow-forward"
-                />
-              </View>
-            </ScrollView>
-          )}
-
-          {/* ── STEP 1: BRANCH ──────────────────────────────────────────── */}
-          {step === 1 && (
-            <View style={styles.carouselStepContent}>
-              <View style={styles.titleWrap}>
-                <Text style={styles.stepTag}>STEP 2 OF 4</Text>
-                <Text style={styles.mainTitle}>SELECT YOUR BRANCH</Text>
-                <Text style={styles.subTitle}>Swipe left/right or tap to select your engineering branch</Text>
-              </View>
-
-              {branches.length > 0 && (
-                <Carousel3D
-                  data={branches}
-                  selectedId={selectedBranch?.id || branches[0].id}
-                  onSelect={(b) => setSelectedBranch(b)}
-                  type="branch"
-                  cardWidth={115}
-                  cardHeight={140}
-                />
-              )}
-
-              {selectedBranch && (
-                <View style={styles.selectionSummary}>
-                  <Text style={styles.selectionSummaryEmoji}>{selectedBranch.emoji}</Text>
-                  <Text style={styles.selectionSummaryText}>{selectedBranch.name}</Text>
-                </View>
-              )}
-
-              <View style={styles.buttonBottomArea}>
-                <GlassButton
-                  title="CONTINUE"
-                  onPress={handleNext}
-                  disabled={!selectedBranch}
-                  iconName="arrow-forward"
-                />
-              </View>
-            </View>
-          )}
-
-          {/* ── STEP 2: DIVISION ────────────────────────────────────────── */}
-          {step === 2 && (
-            <View style={styles.carouselStepContent}>
-              <View style={styles.titleWrap}>
-                <Text style={styles.stepTag}>STEP 3 OF 4</Text>
-                <Text style={styles.mainTitle}>SELECT YOUR DIVISION</Text>
-                <Text style={styles.subTitle}>
-                  {selectedBranch?.name} — Choose your designated class section
+            ) : (
+              /* ── MODE: REGISTER (ALL-IN-ONE SINGLE PAGE) ─────────── */
+              <GlassCard glow style={styles.card}>
+                <Text style={styles.formHeader}>Single Page Registration</Text>
+                <Text style={styles.formSubHeader}>
+                  Set up your profile once. Your timetable will load automatically every time you return.
                 </Text>
-              </View>
 
-              {divisions.length > 0 ? (
-                <Carousel3D
-                  data={divisions}
-                  selectedId={selectedDivision?.id || divisions[0].id}
-                  onSelect={(d) => setSelectedDivision(d)}
-                  type="division"
-                  cardWidth={95}
-                  cardHeight={135}
-                />
-              ) : (
-                <Text style={styles.emptyNote}>No divisions configured for this branch</Text>
-              )}
-
-              {selectedDivision && (
-                <View style={styles.selectionSummary}>
-                  <Text style={styles.selectionSummaryText}>{selectedDivision.name}</Text>
+                {/* 1. Account Credentials */}
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>1. USERNAME</Text>
+                  <GlassInput
+                    value={username}
+                    onChangeText={setUsername}
+                    placeholder="e.g. Om Kumar"
+                    iconName="person-outline"
+                    autoCapitalize="words"
+                  />
                 </View>
-              )}
 
-              <View style={styles.buttonBottomArea}>
-                <GlassButton
-                  title="CONTINUE"
-                  onPress={handleNext}
-                  disabled={!selectedDivision}
-                  iconName="arrow-forward"
-                />
-              </View>
-            </View>
-          )}
-
-          {/* ── STEP 3: SUBDIVISION / BATCH ─────────────────────────────── */}
-          {step === 3 && (
-            <View style={styles.carouselStepContent}>
-              <View style={styles.titleWrap}>
-                <Text style={styles.stepTag}>STEP 4 OF 4</Text>
-                <Text style={styles.mainTitle}>SELECT YOUR SUBDIVISION</Text>
-                <Text style={styles.subTitle}>
-                  {selectedDivision?.name} — Select your practical lab batch
-                </Text>
-              </View>
-
-              {subdivisions.length > 0 ? (
-                <Carousel3D
-                  data={subdivisions}
-                  selectedId={selectedSubdivision?.id || subdivisions[0].id}
-                  onSelect={(s) => setSelectedSubdivision(s)}
-                  type="batch"
-                  cardWidth={105}
-                  cardHeight={135}
-                />
-              ) : (
-                <Text style={styles.emptyNote}>No batches configured for this division</Text>
-              )}
-
-              {selectedSubdivision && (
-                <View style={styles.selectionSummary}>
-                  <Text style={styles.selectionSummaryText}>Batch {selectedSubdivision.name}</Text>
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>2. PASSWORD</Text>
+                  <GlassInput
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="Choose a password"
+                    secureTextEntry
+                    iconName="lock-closed-outline"
+                    autoCapitalize="none"
+                  />
                 </View>
-              )}
 
-              <View style={styles.buttonBottomArea}>
-                <GlassButton
-                  title="VIEW MY TIMETABLE"
-                  onPress={handleNext}
-                  disabled={!selectedSubdivision}
-                  iconName="sparkles-outline"
-                />
-              </View>
-            </View>
-          )}
-        </Animated.View>
+                {/* 2. Select Branch (Responsive Grid - Never overflows) */}
+                <View style={styles.fieldGroup}>
+                  <View style={styles.labelRow}>
+                    <Text style={styles.fieldLabel}>3. SELECT BRANCH</Text>
+                    {selectedBranch && (
+                      <Text style={styles.selectedInlineText}>{selectedBranch.name}</Text>
+                    )}
+                  </View>
+
+                  <View style={styles.branchGrid}>
+                    {branches.map((b) => {
+                      const isSelected = selectedBranch?.id === b.id;
+                      return (
+                        <Pressable
+                          key={b.id}
+                          onPress={() => setSelectedBranch(b)}
+                          style={[styles.branchCard, isSelected && styles.branchCardActive]}
+                        >
+                          <Text style={styles.branchEmoji}>{b.emoji}</Text>
+                          <Text style={[styles.branchCode, isSelected && styles.branchCodeActive]}>
+                            {b.code}
+                          </Text>
+                          <Text
+                            numberOfLines={1}
+                            style={[styles.branchName, isSelected && styles.branchNameActive]}
+                          >
+                            {b.name}
+                          </Text>
+                          {isSelected && (
+                            <View style={styles.branchCheckDot}>
+                              <Ionicons name="checkmark" size={10} color="#000" />
+                            </View>
+                          )}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                {/* 3. Select Division */}
+                <View style={styles.fieldGroup}>
+                  <View style={styles.labelRow}>
+                    <Text style={styles.fieldLabel}>4. SELECT DIVISION</Text>
+                    {selectedDivision && (
+                      <Text style={styles.selectedInlineText}>{selectedDivision.name}</Text>
+                    )}
+                  </View>
+
+                  <View style={styles.chipsRow}>
+                    {divisions.map((d) => {
+                      const isSelected = selectedDivision?.id === d.id;
+                      return (
+                        <Pressable
+                          key={d.id}
+                          onPress={() => setSelectedDivision(d)}
+                          style={[styles.chipPill, isSelected && styles.chipPillActive]}
+                        >
+                          <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
+                            {d.name}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                {/* 4. Select Subdivision (Batch) */}
+                <View style={styles.fieldGroup}>
+                  <View style={styles.labelRow}>
+                    <Text style={styles.fieldLabel}>5. SELECT PRACTICAL BATCH</Text>
+                    {selectedSubdivision && (
+                      <Text style={styles.selectedInlineText}>Batch {selectedSubdivision.name}</Text>
+                    )}
+                  </View>
+
+                  <View style={styles.chipsRow}>
+                    {subdivisions.map((s) => {
+                      const isSelected = selectedSubdivision?.id === s.id;
+                      return (
+                        <Pressable
+                          key={s.id}
+                          onPress={() => setSelectedSubdivision(s)}
+                          style={[styles.chipPill, isSelected && styles.chipPillActive]}
+                        >
+                          <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
+                            Batch {s.name}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                {/* Ready Summary Card */}
+                {selectedBranch && selectedDivision && selectedSubdivision ? (
+                  <View style={styles.summaryBox}>
+                    <Ionicons name="sparkles" size={16} color={GlassColors.cyan} />
+                    <Text style={styles.summaryBoxText}>
+                      Ready: <Text style={{ color: GlassColors.cyan }}>{selectedBranch.code}</Text> •{' '}
+                      <Text style={{ color: GlassColors.cyan }}>{selectedDivision.name}</Text> •{' '}
+                      <Text style={{ color: GlassColors.cyan }}>Batch {selectedSubdivision.name}</Text>
+                    </Text>
+                  </View>
+                ) : null}
+
+                {/* Submit Button */}
+                <View style={{ marginTop: 20 }}>
+                  {loading ? (
+                    <ActivityIndicator color={GlassColors.cyan} size="large" />
+                  ) : (
+                    <GlassButton
+                      title="SAVE & VIEW TIMETABLE"
+                      onPress={handleRegister}
+                      iconName="sparkles-outline"
+                    />
+                  )}
+                </View>
+
+                <Pressable
+                  onPress={() => {
+                    setMode('signin');
+                    setErrorMessage('');
+                  }}
+                  style={styles.switchModeLink}
+                >
+                  <Text style={styles.switchModeText}>
+                    Already registered?{' '}
+                    <Text style={{ color: GlassColors.cyan, fontWeight: '800' }}>Sign In here</Text>
+                  </Text>
+                </Pressable>
+              </GlassCard>
+            )}
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -375,147 +463,280 @@ export default function SetupScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
+    width: '100%',
     backgroundColor: GlassColors.bgDark,
   },
   keyboardAvoid: {
     flex: 1,
+    width: '100%',
   },
-  topNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  scroll: {
+    flex: 1,
+    width: '100%',
+  },
+  scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? 36 : 12,
-    paddingBottom: 8,
-  },
-  backBtn: {
-    flexDirection: 'row',
+    paddingTop: Platform.OS === 'android' ? 36 : 20,
+    paddingBottom: 50,
     alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 8,
+    width: '100%',
   },
-  backBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
+  innerContainer: {
+    width: '100%',
+    maxWidth: 480,
+  },
+  brandingSection: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  logoBadge: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(0, 229, 255, 0.12)',
+    borderWidth: 2,
+    borderColor: GlassColors.cyan,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 0 20px rgba(0, 229, 255, 0.4)',
+      } as any,
+    }),
+  },
+  logoEmoji: {
+    fontSize: 28,
+  },
+  brandTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: GlassColors.textPrimary,
+    letterSpacing: 2.5,
+  },
+  brandSubtitle: {
+    fontSize: 11,
+    fontWeight: '800',
     color: GlassColors.cyan,
-    marginLeft: 2,
+    letterSpacing: 3,
+    marginTop: 3,
   },
-  headerTag: {
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    padding: 4,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  tabButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 229, 255, 0.08)',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  tabButtonActive: {
+    backgroundColor: 'rgba(0, 229, 255, 0.18)',
     borderWidth: 1,
-    borderColor: 'rgba(0, 229, 255, 0.25)',
+    borderColor: 'rgba(0, 229, 255, 0.4)',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 0 12px rgba(0, 229, 255, 0.3)',
+      } as any,
+    }),
+  },
+  tabText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: GlassColors.textMuted,
+    letterSpacing: 1,
+  },
+  tabTextActive: {
+    color: GlassColors.cyan,
+    fontWeight: '900',
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255, 82, 82, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 82, 82, 0.4)',
     borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
+    padding: 12,
+    marginBottom: 16,
   },
-  headerTagDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: GlassColors.cyan,
-    marginRight: 6,
+  errorText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#FF8A80',
+    fontWeight: '600',
   },
-  headerTagText: {
+  card: {
+    width: '100%',
+    padding: 20,
+  },
+  formHeader: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: GlassColors.textPrimary,
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  formSubHeader: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: GlassColors.textMuted,
+    lineHeight: 18,
+    marginBottom: 18,
+  },
+  fieldGroup: {
+    marginBottom: 18,
+  },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  fieldLabel: {
     fontSize: 11,
     fontWeight: '800',
     color: GlassColors.cyan,
     letterSpacing: 1.5,
-  },
-  contentContainer: {
-    flex: 1,
-    justifyContent: 'space-between',
-    paddingBottom: 24,
-  },
-  step0Content: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 22,
-    paddingBottom: 20,
-  },
-  carouselStepContent: {
-    flex: 1,
-    justifyContent: 'space-between',
-    paddingTop: 8,
-  },
-  titleWrap: {
-    alignItems: 'center',
-    paddingHorizontal: 24,
     marginBottom: 8,
   },
-  welcomeText: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: GlassColors.cyan,
-    letterSpacing: 4,
-    marginBottom: 6,
-  },
-  stepTag: {
+  selectedInlineText: {
     fontSize: 11,
-    fontWeight: '800',
-    color: GlassColors.cyan,
-    letterSpacing: 2,
-    marginBottom: 6,
-  },
-  mainTitle: {
-    fontSize: 26,
-    fontWeight: '900',
-    color: GlassColors.textPrimary,
-    letterSpacing: 1,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  subTitle: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: GlassColors.textMuted,
-    textAlign: 'center',
-    lineHeight: 19,
-    maxWidth: 320,
-  },
-  inputCard: {
-    marginVertical: 24,
-    width: '100%',
-  },
-  inputLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: GlassColors.cyan,
-    letterSpacing: 2,
-    marginBottom: 12,
-  },
-  selectionSummary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginHorizontal: 30,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  selectionSummaryEmoji: {
-    fontSize: 18,
-  },
-  selectionSummaryText: {
-    fontSize: 14,
     fontWeight: '700',
     color: GlassColors.textPrimary,
-    letterSpacing: 0.5,
   },
-  emptyNote: {
+  branchGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  branchCard: {
+    width: '31%',
+    flexGrow: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    position: 'relative',
+    ...Platform.select({
+      web: { cursor: 'pointer' } as any,
+    }),
+  },
+  branchCardActive: {
+    borderColor: GlassColors.cyan,
+    backgroundColor: 'rgba(0, 229, 255, 0.14)',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 0 16px rgba(0, 229, 255, 0.45)',
+      } as any,
+    }),
+  },
+  branchEmoji: {
+    fontSize: 20,
+    marginBottom: 4,
+  },
+  branchCode: {
     fontSize: 14,
-    color: GlassColors.textDim,
-    textAlign: 'center',
-    marginVertical: 40,
+    fontWeight: '900',
+    color: GlassColors.textMuted,
+    letterSpacing: 1,
   },
-  buttonBottomArea: {
-    paddingHorizontal: 24,
-    width: '100%',
-    marginTop: 16,
+  branchCodeActive: {
+    color: GlassColors.cyan,
+  },
+  branchName: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: GlassColors.textDim,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  branchNameActive: {
+    color: GlassColors.textPrimary,
+  },
+  branchCheckDot: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: GlassColors.cyan,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chipPill: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.09)',
+    ...Platform.select({
+      web: { cursor: 'pointer' } as any,
+    }),
+  },
+  chipPillActive: {
+    borderColor: GlassColors.cyan,
+    backgroundColor: 'rgba(0, 229, 255, 0.16)',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 0 12px rgba(0, 229, 255, 0.4)',
+      } as any,
+    }),
+  },
+  chipText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: GlassColors.textMuted,
+  },
+  chipTextActive: {
+    color: GlassColors.cyan,
+    fontWeight: '900',
+  },
+  summaryBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(0, 229, 255, 0.07)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.25)',
+    borderRadius: 14,
+    padding: 12,
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  summaryBoxText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: GlassColors.textSecondary,
+    flex: 1,
+  },
+  switchModeLink: {
+    alignItems: 'center',
+    paddingVertical: 14,
+    marginTop: 8,
+  },
+  switchModeText: {
+    fontSize: 13,
+    color: GlassColors.textMuted,
   },
 });

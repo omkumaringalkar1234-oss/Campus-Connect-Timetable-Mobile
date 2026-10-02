@@ -17,8 +17,9 @@ import { TimetableSlotCard } from '@/components/TimetableSlotCard';
 import { GlassCard } from '@/components/GlassCard';
 import { TimetableService } from '@/services/timetable-service';
 import {
-  getStoredTimetablePrefs,
-  UserTimetablePrefs,
+  getCurrentUser,
+  logoutUser,
+  UserAccount,
 } from '@/storage/preferences-storage';
 import { TimetableEntry } from '@/data/timetable-data';
 import { GlassColors } from '@/theme/glass-theme';
@@ -35,7 +36,7 @@ const DAYS = [
 export default function TimetableDashboardScreen() {
   const router = useRouter();
 
-  const [prefs, setPrefs] = useState<UserTimetablePrefs | null>(null);
+  const [user, setUser] = useState<UserAccount | null>(null);
   const [selectedDay, setSelectedDay] = useState<number>(() => {
     const currentDay = new Date().getDay();
     // Sunday (0) maps to Monday (1)
@@ -54,50 +55,55 @@ export default function TimetableDashboardScreen() {
     return () => clearInterval(interval);
   }, []);
 
-  // Load preferences
+  // Load active user
   useEffect(() => {
     (async () => {
-      const stored = await getStoredTimetablePrefs();
-      if (!stored) {
+      const stored = await getCurrentUser();
+      if (!stored || !stored.branchId || !stored.divisionId || !stored.subdivisionId) {
         router.replace('/setup');
         return;
       }
-      setPrefs(stored);
+      setUser(stored);
 
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 350,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web',
       }).start();
     })();
   }, []);
 
-  // Load lectures whenever day or prefs change
+  // Load lectures whenever day or user changes
   useEffect(() => {
-    if (prefs) {
+    if (user) {
       const slots = TimetableService.getDayLectures(
-        prefs.branchId,
-        prefs.divisionId,
-        prefs.subdivisionId,
+        user.branchId,
+        user.divisionId,
+        user.subdivisionId,
         selectedDay
       );
       setLectures(slots);
     }
-  }, [prefs, selectedDay]);
+  }, [user, selectedDay]);
 
   const onRefresh = async () => {
     setRefreshing(true);
     setCurrentTime(new Date());
-    if (prefs) {
+    if (user) {
       const slots = TimetableService.getDayLectures(
-        prefs.branchId,
-        prefs.divisionId,
-        prefs.subdivisionId,
+        user.branchId,
+        user.divisionId,
+        user.subdivisionId,
         selectedDay
       );
       setLectures(slots);
     }
     setTimeout(() => setRefreshing(false), 400);
+  };
+
+  const handleLogout = async () => {
+    await logoutUser();
+    router.replace('/setup');
   };
 
   const getGreeting = () => {
@@ -133,34 +139,40 @@ export default function TimetableDashboardScreen() {
           />
         }
       >
-        <Animated.View style={{ opacity: fadeAnim }}>
-          {/* ── TOP HEADER: GREETING & CLASS IDENTIFIER ────────────────── */}
+        <Animated.View style={[styles.mainWrapper, { opacity: fadeAnim }]}>
+          {/* ── TOP HEADER: GREETING & LOGOUT BUTTON ────────────────────── */}
           <View style={styles.header}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.greeting}>{getGreeting()}</Text>
-              <Text style={styles.username}>
-                {prefs?.username ? prefs.username.toUpperCase() : 'STUDENT'}
+              <Text numberOfLines={1} style={styles.username}>
+                {user?.username ? user.username.toUpperCase() : 'STUDENT'}
               </Text>
             </View>
 
-            <View style={styles.offlineBadge}>
-              <Ionicons name="cloud-offline-outline" size={13} color={GlassColors.cyan} />
-              <Text style={styles.offlineBadgeText}>OFFLINE READY</Text>
+            <View style={styles.headerActions}>
+              <Pressable
+                onPress={handleLogout}
+                hitSlop={8}
+                style={({ pressed }) => [styles.logoutBtn, pressed && { opacity: 0.7 }]}
+              >
+                <Ionicons name="log-out-outline" size={14} color="#FF8A80" />
+                <Text style={styles.logoutText}>LOG OUT</Text>
+              </Pressable>
             </View>
           </View>
 
-          {/* ── CLASS INFO PILL WITH CHANGE CLASS BUTTON ──────────────── */}
+          {/* ── CLASS INFO PILL WITH CHANGE BATCH BUTTON ──────────────── */}
           <GlassCard style={styles.classInfoCard}>
             <View style={styles.classInfoLeft}>
               <View style={styles.branchIcon}>
                 <Ionicons name="school" size={20} color={GlassColors.cyan} />
               </View>
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.branchCode}>
-                  {prefs?.branchCode || prefs?.branchId} • {prefs?.divisionLabel}
+                  {user?.branchCode || user?.branchId} • {user?.divisionLabel}
                 </Text>
-                <Text style={styles.batchLabel}>
-                  Batch {prefs?.subdivisionLabel} • {prefs?.branchLabel}
+                <Text numberOfLines={1} style={styles.batchLabel}>
+                  Batch {user?.subdivisionLabel} • {user?.branchLabel}
                 </Text>
               </View>
             </View>
@@ -169,7 +181,7 @@ export default function TimetableDashboardScreen() {
               onPress={() => router.push('/setup')}
               style={({ pressed }) => [styles.changeClassBtn, pressed && { opacity: 0.75 }]}
             >
-              <Ionicons name="options-outline" size={15} color={GlassColors.cyan} />
+              <Ionicons name="options-outline" size={14} color={GlassColors.cyan} />
               <Text style={styles.changeClassText}>CHANGE</Text>
             </Pressable>
           </GlassCard>
@@ -285,69 +297,84 @@ export default function TimetableDashboardScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
+    width: '100%',
     backgroundColor: GlassColors.bgDark,
   },
   scroll: {
     flex: 1,
+    width: '100%',
   },
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: Platform.OS === 'android' ? 36 : 14,
     paddingBottom: 40,
+    alignItems: 'center',
+    width: '100%',
+  },
+  mainWrapper: {
+    width: '100%',
+    maxWidth: 540,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 18,
+    alignItems: 'center',
+    marginBottom: 16,
   },
   greeting: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
     color: GlassColors.cyan,
     letterSpacing: 2.5,
   },
   username: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '900',
     color: GlassColors.textPrimary,
-    letterSpacing: 1.5,
+    letterSpacing: 1,
     marginTop: 2,
   },
-  offlineBadge: {
+  headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 229, 255, 0.1)',
+    gap: 8,
+  },
+  logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255, 82, 82, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(0, 229, 255, 0.25)',
+    borderColor: 'rgba(255, 82, 82, 0.3)',
     borderRadius: 12,
     paddingHorizontal: 10,
-    paddingVertical: 5,
-    gap: 5,
+    paddingVertical: 6,
   },
-  offlineBadgeText: {
-    fontSize: 9,
+  logoutText: {
+    fontSize: 10,
     fontWeight: '800',
-    color: GlassColors.cyan,
-    letterSpacing: 1,
+    color: '#FF8A80',
+    letterSpacing: 0.5,
   },
   classInfoCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    padding: 14,
     marginBottom: 16,
+    width: '100%',
   },
   classInfoLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     flex: 1,
+    marginRight: 8,
   },
   branchIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: 'rgba(0, 229, 255, 0.12)',
     borderWidth: 1.5,
     borderColor: 'rgba(0, 229, 255, 0.3)',
@@ -355,13 +382,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   branchCode: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: GlassColors.textPrimary,
     letterSpacing: 0.5,
   },
   batchLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: GlassColors.textMuted,
     marginTop: 2,
@@ -374,11 +401,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: GlassColors.cyan,
     borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   changeClassText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
     color: GlassColors.cyan,
     letterSpacing: 1,
@@ -387,6 +414,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     marginBottom: 20,
+    width: '100%',
   },
   statCard: {
     flex: 1,
@@ -415,6 +443,7 @@ const styles = StyleSheet.create({
   },
   daySelectorArea: {
     marginBottom: 20,
+    width: '100%',
   },
   sectionHeading: {
     fontSize: 11,
@@ -429,15 +458,18 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   dayPill: {
-    width: 54,
-    height: 54,
-    borderRadius: 18,
+    width: 52,
+    height: 52,
+    borderRadius: 16,
     borderWidth: 1.5,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     backgroundColor: 'rgba(10, 16, 32, 0.65)',
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+    ...Platform.select({
+      web: { cursor: 'pointer' } as any,
+    }),
   },
   dayPillSelected: {
     borderColor: GlassColors.cyan,
@@ -446,13 +478,6 @@ const styles = StyleSheet.create({
       web: {
         boxShadow: '0 0 16px rgba(0, 229, 255, 0.65)',
       } as any,
-      default: {
-        shadowColor: GlassColors.cyan,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.9,
-        shadowRadius: 10,
-        elevation: 8,
-      },
     }),
   },
   dayCode: {
@@ -475,6 +500,7 @@ const styles = StyleSheet.create({
   },
   lecturesSection: {
     marginTop: 4,
+    width: '100%',
   },
   lectureHeaderRow: {
     flexDirection: 'row',
@@ -483,7 +509,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   dayTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '900',
     color: GlassColors.textPrimary,
     letterSpacing: 1.5,
@@ -497,6 +523,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 40,
     marginTop: 10,
+    width: '100%',
   },
   emptyTitle: {
     fontSize: 18,
