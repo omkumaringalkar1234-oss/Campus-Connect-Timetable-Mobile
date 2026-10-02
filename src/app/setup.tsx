@@ -279,7 +279,7 @@ export default function SetupAndAuthScreen() {
                   <GlassInput
                     value={username}
                     onChangeText={setUsername}
-                    placeholder="e.g. Om Kumar"
+                    placeholder="xyz"
                     iconName="person-outline"
                     autoCapitalize="words"
                   />
