@@ -178,14 +178,7 @@ export default function SetupAndAuthScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.innerContainer}>
-            {/* ── TOP BADGE & BRANDING ───────────────────────────────── */}
-            <View style={styles.brandingSection}>
-              <View style={styles.logoBadge}>
-                <Text style={styles.logoEmoji}>⚡</Text>
-              </View>
-              <Text style={styles.brandTitle}>CAMPUS CONNECT</Text>
-              <Text style={styles.brandSubtitle}>TIMETABLE PORTAL</Text>
-            </View>
+
 
             {/* ── SEGMENTED TAB SWITCH: REGISTER vs SIGN IN ─────────── */}
             <View style={styles.tabContainer}>
@@ -235,10 +228,7 @@ export default function SetupAndAuthScreen() {
             {/* ── MODE: SIGN IN ─────────────────────────────────────── */}
             {mode === 'signin' ? (
               <GlassCard glow style={styles.card}>
-                <Text style={styles.formHeader}>Welcome Back</Text>
-                <Text style={styles.formSubHeader}>
-                  Sign in with your registered username & password to view your timetable.
-                </Text>
+
 
                 <View style={styles.fieldGroup}>
                   <Text style={styles.fieldLabel}>USERNAME</Text>
@@ -292,10 +282,7 @@ export default function SetupAndAuthScreen() {
             ) : (
               /* ── MODE: REGISTER (ALL-IN-ONE SINGLE PAGE) ─────────── */
               <GlassCard glow style={styles.card}>
-                <Text style={styles.formHeader}>Single Page Registration</Text>
-                <Text style={styles.formSubHeader}>
-                  Set up your profile once. Your timetable will load automatically every time you return.
-                </Text>
+
 
                 {/* 1. Account Credentials */}
                 <View style={styles.fieldGroup}>
