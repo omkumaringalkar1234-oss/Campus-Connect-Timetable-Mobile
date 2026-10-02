@@ -266,18 +266,7 @@ export default function SetupAndAuthScreen() {
                   )}
                 </View>
 
-                <Pressable
-                  onPress={() => {
-                    setMode('register');
-                    setErrorMessage('');
-                  }}
-                  style={styles.switchModeLink}
-                >
-                  <Text style={styles.switchModeText}>
-                    Don't have an account?{' '}
-                    <Text style={{ color: GlassColors.cyan, fontWeight: '800' }}>Register here</Text>
-                  </Text>
-                </Pressable>
+
               </GlassCard>
             ) : (
               /* ── MODE: REGISTER (ALL-IN-ONE SINGLE PAGE) ─────────── */
@@ -401,17 +390,7 @@ export default function SetupAndAuthScreen() {
                   </View>
                 </View>
 
-                {/* Ready Summary Card */}
-                {selectedBranch && selectedDivision && selectedSubdivision ? (
-                  <View style={styles.summaryBox}>
-                    <Ionicons name="sparkles" size={16} color={GlassColors.cyan} />
-                    <Text style={styles.summaryBoxText}>
-                      Ready: <Text style={{ color: GlassColors.cyan }}>{selectedBranch.code}</Text> •{' '}
-                      <Text style={{ color: GlassColors.cyan }}>{selectedDivision.name}</Text> •{' '}
-                      <Text style={{ color: GlassColors.cyan }}>Batch {selectedSubdivision.name}</Text>
-                    </Text>
-                  </View>
-                ) : null}
+
 
                 {/* Submit Button */}
                 <View style={{ marginTop: 20 }}>
@@ -426,18 +405,7 @@ export default function SetupAndAuthScreen() {
                   )}
                 </View>
 
-                <Pressable
-                  onPress={() => {
-                    setMode('signin');
-                    setErrorMessage('');
-                  }}
-                  style={styles.switchModeLink}
-                >
-                  <Text style={styles.switchModeText}>
-                    Already registered?{' '}
-                    <Text style={{ color: GlassColors.cyan, fontWeight: '800' }}>Sign In here</Text>
-                  </Text>
-                </Pressable>
+
               </GlassCard>
             )}
           </View>
