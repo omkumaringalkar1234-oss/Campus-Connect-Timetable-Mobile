@@ -10,11 +10,13 @@ import {
   Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassColors } from '@/theme/glass-theme';
 
 const INSTAGRAM_URL = 'https://www.instagram.com/invites/contact/?utm_content=olimohv&stkn=8zywe3hq9mhm';
 
 export function Watermark() {
+  const insets = useSafeAreaInsets();
   const [expanded, setExpanded] = useState(false);
   const scaleAnim = useRef(new Animated.Value(0.85)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -24,7 +26,7 @@ export function Watermark() {
       Animated.parallel([
         Animated.spring(scaleAnim, {
           toValue: 1,
-          tension: 70,
+          tension: 75,
           friction: 7,
           useNativeDriver: Platform.OS !== 'web',
         }),
@@ -42,29 +44,41 @@ export function Watermark() {
 
   const handleOpenInstagram = async () => {
     try {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.open(INSTAGRAM_URL, '_blank');
+        return;
+      }
       const supported = await Linking.canOpenURL(INSTAGRAM_URL);
       if (supported) {
         await Linking.openURL(INSTAGRAM_URL);
       } else {
         await Linking.openURL(INSTAGRAM_URL);
       }
-    } catch (e) {
-      // Fallback
+    } catch {
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         window.open(INSTAGRAM_URL, '_blank');
       }
     }
   };
 
+  const bottomOffset = Platform.OS === 'web' ? 16 : Math.max(16, insets.bottom + 10);
+
   return (
     <>
-      {/* ── SMALL FLOATING WATERMARK BADGE ─────────────────────── */}
-      <View style={styles.floatingContainer} pointerEvents="box-none">
+      {/* ── SMALL FLOATING WATERMARK BADGE (ALWAYS FIXED ON SCREEN) ── */}
+      <View
+        style={[
+          styles.floatingContainer,
+          { bottom: bottomOffset },
+          Platform.OS === 'web' && ({ position: 'fixed', bottom: '16px', right: '14px' } as any),
+        ]}
+        pointerEvents="box-none"
+      >
         <Pressable
           onPress={() => setExpanded(true)}
           style={({ pressed }) => [
             styles.badgePill,
-            pressed && { opacity: 0.8, transform: [{ scale: 0.96 }] },
+            pressed && { opacity: 0.85, transform: [{ scale: 0.95 }] },
           ]}
         >
           <View style={styles.glowDot} />
@@ -73,9 +87,9 @@ export function Watermark() {
           </Text>
           <Ionicons
             name="logo-instagram"
-            size={12}
+            size={13}
             color={GlassColors.cyan}
-            style={{ marginLeft: 3 }}
+            style={{ marginLeft: 2 }}
           />
         </Pressable>
       </View>
@@ -84,7 +98,7 @@ export function Watermark() {
       <Modal
         visible={expanded}
         transparent
-        animationType="none"
+        animationType="fade"
         onRequestClose={() => setExpanded(false)}
       >
         <Pressable
@@ -107,7 +121,7 @@ export function Watermark() {
               {/* Close Button */}
               <Pressable
                 onPress={() => setExpanded(false)}
-                hitSlop={12}
+                hitSlop={14}
                 style={styles.closeBtn}
               >
                 <Ionicons name="close" size={20} color={GlassColors.textMuted} />
@@ -163,41 +177,40 @@ export function Watermark() {
 const styles = StyleSheet.create({
   floatingContainer: {
     position: 'absolute',
-    bottom: 12,
     right: 14,
-    zIndex: 9999,
-    elevation: 9999,
+    zIndex: 999999,
+    elevation: 999999,
   },
   badgePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(8, 14, 30, 0.85)',
-    borderWidth: 1.2,
-    borderColor: 'rgba(0, 229, 255, 0.35)',
+    backgroundColor: 'rgba(6, 12, 28, 0.94)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 229, 255, 0.45)',
     borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    gap: 6,
     ...Platform.select({
       web: {
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        boxShadow: '0 0 14px rgba(0, 229, 255, 0.25)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        boxShadow: '0 0 18px rgba(0, 229, 255, 0.4), 0 4px 10px rgba(0, 0, 0, 0.6)',
         cursor: 'pointer',
       } as any,
       default: {
         shadowColor: GlassColors.cyan,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.5,
-        shadowRadius: 8,
-        elevation: 6,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.6,
+        shadowRadius: 10,
+        elevation: 10,
       },
     }),
   },
   glowDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
     backgroundColor: GlassColors.cyan,
     ...Platform.select({
       web: {
@@ -206,9 +219,9 @@ const styles = StyleSheet.create({
     }),
   },
   badgeText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: 'rgba(255, 255, 255, 0.85)',
     letterSpacing: 0.5,
   },
   badgeAuthor: {
@@ -218,14 +231,14 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(2, 6, 18, 0.75)',
+    backgroundColor: 'rgba(2, 6, 18, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
     ...Platform.select({
       web: {
-        backdropFilter: 'blur(8px)',
-        WebkitBackdropFilter: 'blur(8px)',
+        backdropFilter: 'blur(10px)',
+        WebkitBackdropFilter: 'blur(10px)',
       } as any,
     }),
   },
@@ -235,20 +248,20 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     borderWidth: 1.5,
     borderColor: 'rgba(0, 229, 255, 0.45)',
-    backgroundColor: 'rgba(10, 18, 38, 0.95)',
+    backgroundColor: 'rgba(10, 18, 38, 0.96)',
     overflow: 'hidden',
     ...Platform.select({
       web: {
         backdropFilter: 'blur(24px)',
         WebkitBackdropFilter: 'blur(24px)',
-        boxShadow: '0 0 35px rgba(0, 229, 255, 0.35)',
+        boxShadow: '0 0 35px rgba(0, 229, 255, 0.4)',
       } as any,
       default: {
         shadowColor: GlassColors.cyan,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.7,
         shadowRadius: 20,
-        elevation: 12,
+        elevation: 14,
       },
     }),
   },
