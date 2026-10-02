@@ -5,6 +5,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Platform } from 'react-native';
 import { GlassColors } from '@/theme/glass-theme';
 
+import { Watermark } from '@/components/Watermark';
+
 export default function RootLayout() {
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
@@ -56,6 +58,7 @@ export default function RootLayout() {
         <Stack.Screen name="setup" options={{ animation: 'fade' }} />
         <Stack.Screen name="timetable" options={{ animation: 'fade' }} />
       </Stack>
+      <Watermark />
     </SafeAreaProvider>
   );
 }
