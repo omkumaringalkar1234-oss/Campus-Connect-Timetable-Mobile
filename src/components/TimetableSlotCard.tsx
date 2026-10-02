@@ -19,18 +19,23 @@ export function TimetableSlotCard({ slot, status }: TimetableSlotCardProps) {
         return { label: 'LAB', color: GlassColors.emerald, bg: GlassColors.emeraldDim, icon: 'flask-outline' };
       case 'tutorial':
         return { label: 'TUTORIAL', color: GlassColors.amber, bg: GlassColors.amberDim, icon: 'pencil-outline' };
+      case 'doubt':
+        return { label: 'DOUBT SESSION', color: '#c084fc', bg: 'rgba(192, 132, 252, 0.12)', icon: 'help-circle-outline' };
       default:
         return { label: 'LECTURE', color: GlassColors.cyan, bg: GlassColors.cyanDim, icon: 'book-outline' };
     }
   };
 
   const typeMeta = getTypeMeta();
+  const isDoubt = slot.type === 'doubt';
+  const activeColor = isDoubt ? '#c084fc' : GlassColors.cyan;
 
   return (
     <View
       style={[
         styles.card,
-        isOngoing && styles.cardOngoing,
+        isDoubt && styles.cardDoubt,
+        isOngoing && (isDoubt ? styles.cardDoubtOngoing : styles.cardOngoing),
         isEnded && styles.cardEnded,
       ]}
     >
@@ -40,18 +45,18 @@ export function TimetableSlotCard({ slot, status }: TimetableSlotCardProps) {
           <Ionicons
             name="time-outline"
             size={14}
-            color={isOngoing ? GlassColors.cyan : GlassColors.textSecondary}
+            color={isOngoing ? activeColor : GlassColors.textSecondary}
           />
-          <Text style={[styles.timeText, isOngoing && styles.timeOngoing]}>
+          <Text style={[styles.timeText, isOngoing && { color: activeColor, fontWeight: '800' }]}>
             {slot.startTime} — {slot.endTime}
           </Text>
         </View>
 
         <View style={styles.badgeRow}>
           {isOngoing && (
-            <View style={styles.liveBadge}>
-              <View style={styles.livePulseDot} />
-              <Text style={styles.liveBadgeText}>LIVE NOW</Text>
+            <View style={[styles.liveBadge, { backgroundColor: `${activeColor}28`, borderColor: activeColor }]}>
+              <View style={[styles.livePulseDot, { backgroundColor: activeColor }]} />
+              <Text style={[styles.liveBadgeText, { color: activeColor }]}>LIVE NOW</Text>
             </View>
           )}
 
@@ -63,9 +68,20 @@ export function TimetableSlotCard({ slot, status }: TimetableSlotCardProps) {
       </View>
 
       {/* Subject Title */}
-      <Text style={[styles.subjectTitle, isEnded && styles.subjectEnded]} numberOfLines={2}>
+      <Text style={[
+        styles.subjectTitle,
+        isEnded && styles.subjectEnded,
+        slot.type === 'doubt' && styles.subjectDoubt,
+      ]} numberOfLines={2}>
         {slot.subject}
       </Text>
+
+      {/* Original subject shown for doubt sessions */}
+      {slot.type === 'doubt' && slot.originalSubject ? (
+        <Text style={styles.originalSubjectText} numberOfLines={1}>
+          Substitutes: {slot.originalSubject}
+        </Text>
+      ) : null}
 
       {slot.subjectCode ? (
         <Text style={styles.subjectCode}>{slot.subjectCode}</Text>
@@ -118,6 +134,26 @@ const styles = StyleSheet.create({
         boxShadow: '0 8px 30px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08)',
       } as any,
       default: GlassShadows.cardSoft,
+    }),
+  },
+  cardDoubt: {
+    borderColor: 'rgba(192, 132, 252, 0.25)',
+    backgroundColor: 'rgba(192, 132, 252, 0.04)',
+  },
+  cardDoubtOngoing: {
+    borderColor: '#c084fc',
+    backgroundColor: 'rgba(192, 132, 252, 0.1)',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 0 28px rgba(192, 132, 252, 0.35), inset 0 0 14px rgba(192, 132, 252, 0.08)',
+      } as any,
+      default: {
+        shadowColor: '#c084fc',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.45,
+        shadowRadius: 12,
+        elevation: 8,
+      },
     }),
   },
   cardOngoing: {
@@ -206,6 +242,17 @@ const styles = StyleSheet.create({
   },
   subjectEnded: {
     color: GlassColors.textMuted,
+  },
+  subjectDoubt: {
+    color: '#c084fc',
+  },
+  originalSubjectText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(192, 132, 252, 0.6)',
+    letterSpacing: 0.4,
+    marginBottom: 8,
+    fontStyle: 'italic',
   },
   subjectCode: {
     fontSize: 11,
