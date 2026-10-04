@@ -83,7 +83,7 @@ export function Watermark() {
         >
           <View style={styles.glowDot} />
           <Text style={styles.badgeText}>
-            made by : <Text style={styles.badgeAuthor}>om</Text>
+            made by : <Text style={styles.badgeAuthor}>xyz</Text>
           </Text>
           <Ionicons
             name="logo-instagram"
@@ -136,7 +136,7 @@ export function Watermark() {
 
               {/* Full Name */}
               <Text style={styles.titleSmall}>CREATOR & DEVELOPER</Text>
-              <Text style={styles.fullName}>Omkumar Ingalkar</Text>
+              <Text style={styles.fullName}>xyz</Text>
               <Text style={styles.tagline}>
                 Crafted with passion for campus students
               </Text>
